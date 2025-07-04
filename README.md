@@ -3,7 +3,8 @@
 ## Description
 
 A simple, automated Bash tool to manage SSL certificates using Certbot and Nginx.  
-Supports auto-renew, Docker-friendly stop/start, cron job auto-check, and works on multiple Linux distributions including Ubuntu, Debian, CentOS, Rocky Linux, and more.
+Supports auto-renew, Docker-friendly stop/start, cron job auto-check, and flexible Nginx configuration management.  
+Works seamlessly on multiple Linux distributions including Ubuntu, Debian, CentOS, Rocky Linux, AlmaLinux, and more.
 
 ## Features
 
@@ -12,6 +13,9 @@ Supports auto-renew, Docker-friendly stop/start, cron job auto-check, and works 
 - Check expiry for all domains in one command
 - Automatically stop/start Docker containers using port 80 during renewal
 - Setup cron job for automatic renewal checks
+- Manage Nginx configuration:
+  - Automatically update `nginx.conf` from template with backup & restore options
+  - Auto-generate `conf.d` configurations for each domain after SSL installation
 - Compatible with most popular Linux distributions (Ubuntu, Debian, CentOS, Rocky Linux, AlmaLinux, etc.)
 
 ## Installation
@@ -39,3 +43,4 @@ easyssl
 5. Auto check & renew if expiring
 6. Add cron job for auto renew
 7. Remove cron job for auto renew
+8. Manage nginx config (enable/disable + restore)
