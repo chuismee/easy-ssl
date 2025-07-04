@@ -7,6 +7,8 @@
 # License: MIT
 #
 
+AUTO_NGINX_CONFIG="no"
+
 if [ -f /etc/debian_version ]; then
     OS="debian"
 elif [ -f /etc/redhat-release ]; then
@@ -59,6 +61,21 @@ function install_ssl {
     sudo cp /etc/letsencrypt/live/$DOMAIN/fullchain.pem /etc/nginx/ssl/$DOMAIN/fullchain.pem
     sudo cp /etc/letsencrypt/live/$DOMAIN/privkey.pem /etc/nginx/ssl/$DOMAIN/privkey.pem
     echo "SSL certificates for $DOMAIN have been copied to /etc/nginx/ssl/$DOMAIN/."
+
+    if [ "$AUTO_NGINX_CONFIG" = "yes" ]; then
+        echo "Creating nginx conf.d file for $DOMAIN..."
+        sudo curl -fsSL https://raw.githubusercontent.com/chuismee/easy-ssl/main/conf.d.example -o /tmp/conf.d.example
+
+        sudo sed "s|__DOMAIN__|$DOMAIN|g" /tmp/conf.d.example | sudo tee /etc/nginx/conf.d/$DOMAIN.conf > /dev/null
+
+        sudo rm -f /tmp/conf.d.example
+        echo "✅ /etc/nginx/conf.d/$DOMAIN.conf created."
+
+        echo "Testing Nginx configuration..."
+        sudo nginx -t
+    else
+        echo "⚠️ Auto Nginx config is disabled. Skipping conf.d generation."
+    fi
 
     echo "Restarting Docker containers..."
     for container in $containers; do
@@ -213,6 +230,53 @@ function remove_cron_auto_renew {
     echo "Cron job removed (if it existed)."
 }
 
+function manage_nginx_config {
+    echo "Current auto nginx config: $AUTO_NGINX_CONFIG"
+
+    if [ "$AUTO_NGINX_CONFIG" = "no" ]; then
+        echo "This will overwrite your /etc/nginx/nginx.conf with EasySSL template."
+        read -p "Do you want to ENABLE and overwrite nginx.conf? (y/n): " CONFIRM
+        if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
+
+            if [ ! -f /etc/nginx/nginx.conf.default ]; then
+                sudo cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.default
+                echo "Backup created: /etc/nginx/nginx.conf.default"
+            fi
+
+            sudo curl -fsSL https://raw.githubusercontent.com/chuismee/easy-ssl/main/nginx.conf.example -o /etc/nginx/nginx.conf
+            echo "✅ nginx.conf has been updated from template."
+
+            echo "Testing nginx config..."
+            sudo nginx -t && sudo systemctl reload nginx
+
+            AUTO_NGINX_CONFIG="yes"
+            echo "✅ Auto nginx config ENABLED."
+        else
+            echo "❌ Aborted. Auto nginx config remains disabled."
+        fi
+    else
+        echo "You are about to DISABLE auto nginx config and restore default."
+        read -p "Do you want to restore your old nginx.conf? (y/n): " CONFIRM
+        if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
+            if [ -f /etc/nginx/nginx.conf.default ]; then
+                sudo mv /etc/nginx/nginx.conf.default /etc/nginx/nginx.conf
+                echo "✅ nginx.conf restored from backup."
+
+                sudo nginx -t && sudo systemctl reload nginx
+                echo "Nginx reloaded."
+            else
+                echo "⚠️ No backup found. Skipping restore."
+            fi
+
+            AUTO_NGINX_CONFIG="no"
+            
+            echo "✅ Auto nginx config DISABLED."
+        else
+            echo "❌ Aborted. Auto nginx config remains enabled."
+        fi
+    fi
+}
+
 echo "Select an option:"
 echo "1. Add domain"
 echo "2. Install SSL"
@@ -221,6 +285,8 @@ echo "4. Check SSL certificate expiry"
 echo "5. Auto check & renew if expiring"
 echo "6. Add cron job for auto renew"
 echo "7. Remove cron job for auto renew"
+echo "8. Manage nginx config (enable/disable + restore)"
+
 read -p "Enter your choice: " CHOICE
 
 case $CHOICE in
@@ -231,5 +297,6 @@ case $CHOICE in
     5) auto_check_and_renew ;;
     6) add_cron_auto_renew ;;
     7) remove_cron_auto_renew ;;
+    8) manage_nginx_config ;;
     *) echo "Invalid choice. Exiting." ;;
 esac

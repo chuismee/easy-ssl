@@ -1,0 +1,48 @@
+# TEMPLATE-BY-CHUISME
+
+user www-data;
+worker_processes auto;
+pid /run/nginx.pid;
+error_log /var/log/nginx/error.log;
+include /etc/nginx/modules-enabled/*.conf;
+
+events {
+        worker_connections 1024;
+        # multi_accept on;
+}
+
+http {
+
+        #BASE SETTING
+        sendfile on;
+        tcp_nopush on;
+        types_hash_max_size 4096;
+        keepalive_timeout 65;
+
+        include /etc/nginx/mime.types;
+        default_type application/octet-stream;
+
+        # LOG SETTING & FORMAT
+        log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+
+        access_log  /var/log/nginx/access.log  main;
+
+        #GZIP SETTING
+        gzip on;
+        # gzip_vary on;
+        # gzip_proxied any;
+        # gzip_comp_level 6;
+        # gzip_buffers 16 8k;
+        # gzip_http_version 1.1;
+        # gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+
+        #HOST CONFIG
+        server {
+             listen 80;
+             return 301 https://$host$request_uri;
+        }
+
+        include /etc/nginx/conf.d/*.conf;
+}
