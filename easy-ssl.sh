@@ -280,6 +280,7 @@ function manage_nginx_config {
 if [ -n "$1" ]; then
     CHOICE="$1"
 else
+    echo "Current auto nginx config: $AUTO_NGINX_CONFIG"
     echo "Select an option:"
     echo "1. Add domain"
     echo "2. Install SSL"
