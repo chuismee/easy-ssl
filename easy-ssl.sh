@@ -277,17 +277,21 @@ function manage_nginx_config {
     fi
 }
 
-echo "Select an option:"
-echo "1. Add domain"
-echo "2. Install SSL"
-echo "3. Renew SSL"
-echo "4. Check SSL certificate expiry"
-echo "5. Auto check & renew if expiring"
-echo "6. Add cron job for auto renew"
-echo "7. Remove cron job for auto renew"
-echo "8. Manage nginx config (enable/disable + restore)"
+if [ -n "$1" ]; then
+    CHOICE="$1"
+else
+    echo "Select an option:"
+    echo "1. Add domain"
+    echo "2. Install SSL"
+    echo "3. Renew SSL"
+    echo "4. Check SSL certificate expiry"
+    echo "5. Auto check & renew if expiring"
+    echo "6. Add cron job for auto renew"
+    echo "7. Remove cron job for auto renew"
+    echo "8. Manage nginx config (enable/disable + restore)"
 
-read -p "Enter your choice: " CHOICE
+    read -p "Enter your choice: " CHOICE
+fi
 
 case $CHOICE in
     1) add_domain ;;
