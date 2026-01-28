@@ -43,4 +43,5 @@ easyssl
 5. Auto check & renew if expiring
 6. Add cron job for auto renew
 7. Remove cron job for auto renew
-8. Manage nginx config (enable/disable + restore)
+8. View log
+9. Manage nginx config (enable/disable + restore)
