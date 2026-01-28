@@ -36,6 +36,13 @@ fi
 
 source ~/.bashrc
 
+CRON_CMD="/usr/local/bin/easyssl 5"
+CRON_JOB="0 3 * * * $CRON_CMD >> /var/log/easyssl.log 2>&1"
+(sudo crontab -l 2>/dev/null; echo "$CRON_JOB") | sudo crontab -
+echo "Cron job added: $CRON_JOB"
+
+echo "AUTO RENEW: ENABLED"
+
 INSTALLER_PATH="$(realpath "$0")"
 rm -f "$INSTALLER_PATH"
 
