@@ -7,7 +7,8 @@
 # License: MIT
 #
 
-AUTO_NGINX_CONFIG="no"
+AUTO_NGINX_CONFIG="disabled"
+AUTO_RENEW_CRON="enabled"
 
 if [ -f /etc/debian_version ]; then
     OS="debian"
@@ -120,6 +121,9 @@ function renew_ssl {
 }
 
 function check_ssl_expiry {
+        LOG_FILE="/var/log/ssl_auto_renew.log"
+    exec > >(sudo tee -a "$LOG_FILE") 2>&1
+    
     base_path="/etc/letsencrypt/live"
 
     if [ ! -d "$base_path" ]; then
@@ -152,6 +156,9 @@ function check_ssl_expiry {
 }
 
 function auto_check_and_renew {
+    LOG_FILE="/var/log/ssl_auto_renew.log"
+    exec > >(sudo tee -a "$LOG_FILE") 2>&1
+
     base_path="/etc/letsencrypt/live"
     install_certbot
 
@@ -160,7 +167,7 @@ function auto_check_and_renew {
         return
     fi
 
-    echo "Checking and auto-renewing SSL certificates:"
+    echo "===== $(date '+%Y-%m-%d %H:%M:%S') Checking and auto-renewing SSL certificates ====="
     echo "---------------------------------------------"
 
     for domain in $(sudo ls $base_path); do
@@ -214,6 +221,7 @@ function auto_check_and_renew {
 function add_cron_auto_renew {
     CRON_CMD="/usr/local/bin/easyssl 5"
     CRON_JOB="0 3 * * * $CRON_CMD >> /var/log/ssl_auto_renew.log 2>&1"
+    AUTO_RENEW_CRON="enabled"
 
     if sudo crontab -l 2>/dev/null | grep -F "$CRON_CMD" &>/dev/null; then
         echo "Cron job already exists."
@@ -227,8 +235,44 @@ function add_cron_auto_renew {
 function remove_cron_auto_renew {
     CRON_CMD="/usr/local/bin/easyssl 5"
     sudo crontab -l 2>/dev/null | grep -vF "$CRON_CMD" | sudo crontab -
+    AUTO_RENEW_CRON="disabled"
     echo "Cron job removed (if it existed)."
+
 }
+
+function view_auto_renew_log {
+    LOG_FILE="/var/log/ssl_auto_renew.log"
+
+    echo "===== EasySSL Auto Renew Log ====="
+
+    if [ ! -f "$LOG_FILE" ]; then
+        echo "Log file not found: $LOG_FILE"
+        echo "Cron job may not have run yet."
+        return
+    fi
+
+    echo "1. View full log"
+    echo "2. View last 50 lines (recommended)"
+    echo "3. Follow log in realtime (like tail -f)"
+    read -p "Choose an option: " LOG_CHOICE
+
+    case $LOG_CHOICE in
+        1)
+            sudo less "$LOG_FILE"
+            ;;
+        2)
+            sudo tail -n 50 "$LOG_FILE"
+            ;;
+        3)
+            echo "Press CTRL+C to stop viewing..."
+            sudo tail -f "$LOG_FILE"
+            ;;
+        *)
+            echo "Invalid choice."
+            ;;
+    esac
+}
+
 
 function manage_nginx_config {
     echo "Current auto nginx config: $AUTO_NGINX_CONFIG"
@@ -249,7 +293,7 @@ function manage_nginx_config {
             echo "Testing nginx config..."
             sudo nginx -t && sudo systemctl reload nginx
 
-            AUTO_NGINX_CONFIG="yes"
+            AUTO_NGINX_CONFIG="enabled"
             echo "✅ Auto nginx config ENABLED."
         else
             echo "❌ Aborted. Auto nginx config remains disabled."
@@ -268,7 +312,7 @@ function manage_nginx_config {
                 echo "⚠️ No backup found. Skipping restore."
             fi
 
-            AUTO_NGINX_CONFIG="no"
+            AUTO_NGINX_CONFIG="disabled"
             
             echo "✅ Auto nginx config DISABLED."
         else
@@ -280,7 +324,8 @@ function manage_nginx_config {
 if [ -n "$1" ]; then
     CHOICE="$1"
 else
-    echo "Current auto nginx config: $AUTO_NGINX_CONFIG"
+    echo "Auto nginx config: $AUTO_NGINX_CONFIG"
+    echo "Auto renew cron: $AUTO_RENEW_CRON"
     echo "Select an option:"
     echo "1. Add domain"
     echo "2. Install SSL"
@@ -289,7 +334,8 @@ else
     echo "5. Auto check & renew if expiring"
     echo "6. Add cron job for auto renew"
     echo "7. Remove cron job for auto renew"
-    echo "8. Manage nginx config (enable/disable + restore)"
+    echo "8. View log"
+    echo "9. Manage nginx config (enable/disable + restore)"
 
     read -p "Enter your choice: " CHOICE
 fi
@@ -302,6 +348,7 @@ case $CHOICE in
     5) auto_check_and_renew ;;
     6) add_cron_auto_renew ;;
     7) remove_cron_auto_renew ;;
-    8) manage_nginx_config ;;
+    8) view_log ;;
+    9) manage_nginx_config ;;
     *) echo "Invalid choice. Exiting." ;;
 esac
