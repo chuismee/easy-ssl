@@ -35,6 +35,12 @@ After installation, simply run:
 easyssl
 ```
 
+To update, run:
+
+```bash
+sudo easyssl update
+```
+
 ## Menu options:
 1. Add domain
 2. Install SSL

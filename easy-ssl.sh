@@ -7,6 +7,7 @@
 # License: MIT
 #
 
+EASYSSL_VERSION="1.1.0"
 AUTO_NGINX_CONFIG="disabled"
 AUTO_RENEW_CRON="enabled"
 
@@ -41,6 +42,9 @@ function add_domain {
 }
 
 function install_ssl {
+    LOG_FILE="/var/log/easyssl.log"
+    exec > >(sudo tee -a "$LOG_FILE") 2>&1
+
     read -p "Enter the domain name: " DOMAIN
     install_certbot
 
@@ -88,6 +92,9 @@ function install_ssl {
 }
 
 function renew_ssl {
+    LOG_FILE="/var/log/easyssl.log"
+    exec > >(sudo tee -a "$LOG_FILE") 2>&1
+
     read -p "Enter the domain name: " DOMAIN
     install_certbot
 
@@ -121,9 +128,9 @@ function renew_ssl {
 }
 
 function check_ssl_expiry {
-        LOG_FILE="/var/log/ssl_auto_renew.log"
+    LOG_FILE="/var/log/easyssl.log"
     exec > >(sudo tee -a "$LOG_FILE") 2>&1
-    
+
     base_path="/etc/letsencrypt/live"
 
     if [ ! -d "$base_path" ]; then
@@ -156,7 +163,7 @@ function check_ssl_expiry {
 }
 
 function auto_check_and_renew {
-    LOG_FILE="/var/log/ssl_auto_renew.log"
+    LOG_FILE="/var/log/easyssl.log"
     exec > >(sudo tee -a "$LOG_FILE") 2>&1
 
     base_path="/etc/letsencrypt/live"
@@ -220,7 +227,7 @@ function auto_check_and_renew {
 
 function add_cron_auto_renew {
     CRON_CMD="/usr/local/bin/easyssl 5"
-    CRON_JOB="0 3 * * * $CRON_CMD >> /var/log/ssl_auto_renew.log 2>&1"
+    CRON_JOB="0 3 * * * $CRON_CMD >> /var/log/easyssl.log 2>&1"
     AUTO_RENEW_CRON="enabled"
 
     if sudo crontab -l 2>/dev/null | grep -F "$CRON_CMD" &>/dev/null; then
@@ -241,7 +248,7 @@ function remove_cron_auto_renew {
 }
 
 function view_auto_renew_log {
-    LOG_FILE="/var/log/ssl_auto_renew.log"
+    LOG_FILE="/var/log/easyssl.log"
 
     echo "===== EasySSL Auto Renew Log ====="
 
@@ -321,11 +328,39 @@ function manage_nginx_config {
     fi
 }
 
+function update_easyssl {
+    echo "Current version: $EASYSSL_VERSION"
+    echo "Checking for updates..."
+
+    TMP_FILE="/tmp/easyssl_latest"
+
+    if ! sudo curl -fsSL https://raw.githubusercontent.com/chuismee/easy-ssl/main/easyssl -o "$TMP_FILE"; then
+        echo "Failed to download latest version."
+        return 1
+    fi
+
+    echo "Backing up current version..."
+    sudo cp /usr/local/bin/easyssl /usr/local/bin/easyssl.bak.$(date +%F_%T)
+
+    echo "Updating..."
+    sudo mv "$TMP_FILE" /usr/local/bin/easyssl
+    sudo chmod +x /usr/local/bin/easyssl
+
+    echo "Updated successfully!"
+    echo "Run 'easyssl' to use the new version."
+}
+
+if [ "$1" = "update" ]; then
+    update_easyssl
+    exit 0
+fi
+
 if [ -n "$1" ]; then
     CHOICE="$1"
 else
-    echo "Auto nginx config: $AUTO_NGINX_CONFIG"
-    echo "Auto renew cron: $AUTO_RENEW_CRON"
+    echo "EASYSSL_VERSION: $EASYSSL_VERSION"
+    echo "AUTO RENEW SSL: $AUTO_RENEW_CRON"
+    echo "AUTO NGINX CONFIG: $AUTO_NGINX_CONFIG"
     echo "Select an option:"
     echo "1. Add domain"
     echo "2. Install SSL"
