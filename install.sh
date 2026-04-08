@@ -45,6 +45,21 @@ fi
 
 source ~/.bashrc
 
+# ─── Firewall ─────────────────────────────────────────────────────────────────
+echo "Opening ports 80 and 443..."
+if command -v ufw &>/dev/null; then
+    sudo ufw allow 80/tcp
+    sudo ufw allow 443/tcp
+    echo "Ports 80 and 443 opened via ufw."
+elif command -v firewall-cmd &>/dev/null; then
+    sudo firewall-cmd --permanent --add-service=http
+    sudo firewall-cmd --permanent --add-service=https
+    sudo firewall-cmd --reload
+    echo "Ports 80 and 443 opened via firewalld."
+else
+    echo "⚠️  No supported firewall found (ufw/firewalld). Please open ports 80 and 443 manually."
+fi
+
 # ─── Cron ─────────────────────────────────────────────────────────────────────
 CRON_CMD="/usr/local/bin/easyssl 5"
 CRON_JOB="0 3 * * * $CRON_CMD >> /var/log/easyssl.log 2>&1"
