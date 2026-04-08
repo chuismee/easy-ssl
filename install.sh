@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Script Name: easyssl
+# Script Name: easyssl installer
 # Description: Simple and automated SSL management for Nginx using Certbot. Supports auto-renew and Docker-friendly stop/start.
 # Author: chuisme
 # Author URI: https://chuis.me
@@ -8,26 +8,35 @@
 #
 
 TARGET_PATH="/usr/local/bin/easyssl"
+CONFIG_FILE="/etc/easyssl/easyssl.conf"
 EASY_SSL_URL="https://raw.githubusercontent.com/chuismee/easy-ssl/main/easy-ssl.sh"
 
+# ─── Email ────────────────────────────────────────────────────────────────────
 if [[ -n "$1" ]]; then
     USER_EMAIL="$1"
 else
-    read -p "Enter your email to use for SSL registration: " USER_EMAIL
+    read -p "Enter your email for SSL registration (Leave blank to configure later): " USER_EMAIL
 fi
 
-if [[ -z "$USER_EMAIL" ]]; then
-    echo "Email is required. Exiting."
-    exit 1
-fi
-
-echo "Downloading EasySSL ..."
+# ─── Download ─────────────────────────────────────────────────────────────────
+echo "Downloading EasySSL..."
 sudo curl -fsSL "$EASY_SSL_URL" -o "$TARGET_PATH"
-
-sudo sed -i "s|EMAIL=\"__EMAIL_PLACEHOLDER__\"|EMAIL=\"$USER_EMAIL\"|g" "$TARGET_PATH"
-
 sudo chmod +x "$TARGET_PATH"
 
+# ─── Save config ──────────────────────────────────────────────────────────────
+sudo mkdir -p /etc/easyssl
+sudo tee "$CONFIG_FILE" > /dev/null <<EOF
+EMAIL="$USER_EMAIL"
+AUTO_NGINX_CONFIG="disabled"
+EOF
+
+if [[ -n "$USER_EMAIL" ]]; then
+    echo "Email saved to $CONFIG_FILE"
+else
+    echo "⚠️  No email configured. EasySSL will ask for your email on first use."
+fi
+
+# ─── Alias ────────────────────────────────────────────────────────────────────
 if ! grep -q "alias easyssl=" ~/.bashrc; then
     echo "alias easyssl='/usr/local/bin/easyssl'" >> ~/.bashrc
 else
@@ -36,15 +45,22 @@ fi
 
 source ~/.bashrc
 
+# ─── Cron ─────────────────────────────────────────────────────────────────────
 CRON_CMD="/usr/local/bin/easyssl 5"
 CRON_JOB="0 3 * * * $CRON_CMD >> /var/log/easyssl.log 2>&1"
-(sudo crontab -l 2>/dev/null; echo "$CRON_JOB") | sudo crontab -
-echo "Cron job added: $CRON_JOB"
 
-echo "AUTO RENEW: ENABLED"
+if sudo crontab -l 2>/dev/null | grep -qF "$CRON_CMD"; then
+    echo "Auto-renew cron job already exists."
+else
+    (sudo crontab -l 2>/dev/null; echo "$CRON_JOB") | sudo crontab -
+    echo "Auto-renew cron job added (runs daily at 3:00 AM)."
+fi
 
+# ─── Cleanup ──────────────────────────────────────────────────────────────────
 INSTALLER_PATH="$(realpath "$0")"
 rm -f "$INSTALLER_PATH"
 
+echo ""
 echo "✅ Installation completed!"
-echo "You can now run 'easyssl' from anywhere in your terminal."
+echo "   Run 'easyssl' from anywhere to get started."
+echo "   Run 'easyssl status' to see an overview."
