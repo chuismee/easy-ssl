@@ -67,7 +67,7 @@ function install_ssl {
     sudo cp /etc/letsencrypt/live/$DOMAIN/privkey.pem /etc/nginx/ssl/$DOMAIN/privkey.pem
     echo "SSL certificates for $DOMAIN have been copied to /etc/nginx/ssl/$DOMAIN/."
 
-    if [ "$AUTO_NGINX_CONFIG" = "yes" ]; then
+    if [ "$AUTO_NGINX_CONFIG" = "enabled" ]; then
         echo "Creating nginx conf.d file for $DOMAIN..."
         sudo curl -fsSL https://raw.githubusercontent.com/chuismee/easy-ssl/main/conf.d.example -o /tmp/conf.d.example
 
@@ -284,7 +284,7 @@ function view_auto_renew_log {
 function manage_nginx_config {
     echo "Current auto nginx config: $AUTO_NGINX_CONFIG"
 
-    if [ "$AUTO_NGINX_CONFIG" = "no" ]; then
+    if [ "$AUTO_NGINX_CONFIG" = "disabled" ]; then
         echo "This will overwrite your /etc/nginx/nginx.conf with EasySSL template."
         read -p "Do you want to ENABLE and overwrite nginx.conf? (y/n): " CONFIRM
         if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
