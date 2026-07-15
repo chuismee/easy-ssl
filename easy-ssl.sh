@@ -9,7 +9,7 @@
 # License: MIT
 #
 
-EASYSSL_VERSION="1.3.0"
+EASYSSL_VERSION="1.4.0"
 
 # ─── Config ───────────────────────────────────────────────────────────────────
 CONFIG_FILE="/etc/easyssl/easyssl.conf"
@@ -31,7 +31,7 @@ EOF
 }
 
 function ensure_email {
-    if [ -z "$EMAIL" ] || [ "$EMAIL" = "__EMAIL_PLACEHOLDER__" ]; then
+    if [ -z "$EMAIL" ]; then
         echo ""
         echo "No email configured. An email is required for Let's Encrypt notifications."
         read -p "Enter your email address: " EMAIL
@@ -76,6 +76,32 @@ function install_certbot {
             sudo yum install python3-certbot-nginx -y 2>/dev/null || true
         fi
     fi
+
+    ensure_deploy_hook
+}
+
+# Global certbot deploy-hook: fires after ANY successful renewal, whether triggered by
+# easyssl's own cron, the OS's own certbot systemd timer / cron.d/certbot, or a manual
+# "certbot renew". This is what keeps /etc/nginx/ssl in sync no matter which mechanism
+# actually renews the certificate — previously only easyssl's own renew functions copied
+# the new key, so a renewal performed by the OS's certbot timer (which runs independently,
+# on its own 30-day threshold) never reached /etc/nginx/ssl and nginx kept serving the
+# stale key until someone copied it by hand.
+function ensure_deploy_hook {
+    local hook_dir="/etc/letsencrypt/renewal-hooks/deploy"
+    local hook_file="$hook_dir/easyssl-sync.sh"
+
+    sudo mkdir -p "$hook_dir"
+    sudo tee "$hook_file" > /dev/null <<'HOOK'
+#!/bin/bash
+# Installed by EasySSL. Do not edit — regenerated on every easyssl run.
+DOMAIN="$(basename "$RENEWED_LINEAGE")"
+mkdir -p "/etc/nginx/ssl/$DOMAIN"
+cp "$RENEWED_LINEAGE/fullchain.pem" "/etc/nginx/ssl/$DOMAIN/fullchain.pem"
+cp "$RENEWED_LINEAGE/privkey.pem" "/etc/nginx/ssl/$DOMAIN/privkey.pem"
+systemctl reload nginx 2>/dev/null || true
+HOOK
+    sudo chmod +x "$hook_file"
 }
 
 function has_nginx_plugin {
@@ -93,7 +119,7 @@ function run_certbot {
     else
         echo "Nginx plugin not available. Using standalone mode (Nginx will stop briefly)..."
         local containers
-        containers=$(sudo docker ps --filter "expose=80" --format "{{.ID}}" 2>/dev/null)
+        containers=$(sudo docker ps --filter "publish=80" --format "{{.ID}}" 2>/dev/null)
         if [ -n "$containers" ]; then
             echo "Stopping Docker containers using port 80..."
             for c in $containers; do sudo docker stop "$c"; done
@@ -101,7 +127,8 @@ function run_certbot {
         echo "Stopping Nginx..."
         sudo systemctl stop nginx
 
-        sudo certbot certonly --standalone -d "$domain" --non-interactive --agree-tos -m "$EMAIL" $extra_flags
+        sudo certbot certonly --standalone -d "$domain" --non-interactive --agree-tos -m "$EMAIL" \
+            --pre-hook "systemctl stop nginx" --post-hook "systemctl start nginx" $extra_flags
         local result=$?
 
         if [ -n "$containers" ]; then
@@ -325,19 +352,19 @@ function auto_check_and_renew {
             days_left=$(( (expiry_seconds - now_seconds) / 86400 ))
 
             printf "%-30s : %d days left\n" "$domain" "$days_left"
-
-            if [ "$days_left" -le 15 ]; then
-                echo ">>> Renewing $domain..."
-                run_certbot "$domain" "--force-renewal"
-                sudo cp /etc/letsencrypt/live/$domain/fullchain.pem /etc/nginx/ssl/$domain/fullchain.pem
-                sudo cp /etc/letsencrypt/live/$domain/privkey.pem /etc/nginx/ssl/$domain/privkey.pem
-                sudo systemctl reload nginx 2>/dev/null || true
-                echo ">>> $domain renewed."
-            fi
         else
             echo "$domain : cert.pem not found."
         fi
     done
+
+    # Defer the actual renewal decision to certbot itself instead of re-implementing our
+    # own day-threshold logic. This is the same call the OS's own certbot systemd timer /
+    # cron.d/certbot job makes, so there is only ever one authority deciding when a cert is
+    # due — no more mismatch between easyssl's 15-day threshold and certbot's own 30-day
+    # default that used to leave /etc/nginx/ssl out of sync. The deploy-hook installed by
+    # ensure_deploy_hook handles copying the renewed key and reloading nginx.
+    echo ">>> Running certbot renew..."
+    sudo certbot renew --non-interactive
 }
 
 function status_dashboard {
